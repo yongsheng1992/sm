@@ -1,7 +1,6 @@
 package sm
 
 import (
-	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"log"
 	"net/http"
@@ -54,28 +53,11 @@ func TestNewTrie(t *testing.T) {
 			urlMap[url] = true
 		}
 	}
-	fmt.Println("=============================")
 	trie.BFS(func(key []byte, node *Node) {
 		if node.IsKey {
-			//fmt.Println(string(key), node)
-			fmt.Println(node.Value, string(key))
+			if node.Value != string(key) {
+				t.Error("bfs failed")
+			}
 		}
 	})
-
-	//k := []byte("https://finance.sina.com.cn/money/forex/hq/USDCNY.shtml")
-	//fmt.Println("===========================")
-	//for _,idx := range trie.SeekBefore(k) {
-	//	fmt.Println(string(k[0:idx]))
-	//}
-	_, val := trie.Find([]byte("https://finance.sina.com.cn/roll/2019-11-20/doc-iihnzahi2038825.shtml"))
-	fmt.Println(val)
-}
-
-func TestAppend(t *testing.T) {
-	s := make([]byte, 0)
-	b := append(s, 56)
-	c := append(s, 57)
-	fmt.Println(string(s))
-	fmt.Println(string(b))
-	fmt.Println(string(c))
 }

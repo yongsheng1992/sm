@@ -194,11 +194,14 @@ func (trie *Trie) BFS(fn func(key []byte, node *Node)) {
 	queue.Put(make([]byte, 0), trie.Root)
 
 	for !queue.Empty() {
-		key, node := queue.Get()
-		fn(key, node)
+		suffix, node := queue.Get()
+		fn(suffix, node)
 
 		for ord, child := range node.Children {
-			queue.Put(append(key, ord), child)
+			path := make([]byte, len(suffix))
+			copy(path, suffix)
+			path = append(path, ord)
+			queue.Put(path, child)
 		}
 	}
 }
