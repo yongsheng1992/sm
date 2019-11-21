@@ -1,5 +1,7 @@
 package sm
 
+import "fmt"
+
 // An implement of trie tree
 
 type Node struct {
@@ -94,8 +96,16 @@ func (trie *Trie) Find(key []byte) (ret bool, value interface{}) {
 	return ret, value
 }
 
-func (trie *Trie) SeekAfter(key []byte) {
+func (trie *Trie) SeekAfter(key []byte) (it *Iterator) {
+	_, node, step := trie.Walk(key)
 
+	if node == nil {
+		return it
+	}
+
+	fmt.Println(node.Value, string(key[0:step]), len(node.Children))
+	it = NewIterator(key, node)
+	return it
 }
 
 func (trie *Trie) SeekBefore(key []byte) []int {

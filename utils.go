@@ -1,6 +1,8 @@
 package sm
 
-import "container/list"
+import (
+	"container/list"
+)
 
 type Item struct {
 	Key  []byte
@@ -66,4 +68,31 @@ func (s *Stack) Pop() (key []byte, node *Node) {
 
 func (s *Stack) Push(key []byte, node *Node) {
 	s.List.PushBack(&Item{Key: key, Node: node})
+}
+
+type Iterator struct {
+	Queue *Queue
+}
+
+func NewIterator(key []byte, node *Node) (it *Iterator) {
+	it = &Iterator{Queue: NewQueue()}
+	it.Queue.Put(key, node)
+	return it
+}
+
+func (it *Iterator) HasNext() bool {
+	return it != nil && !it.Queue.Empty()
+}
+
+func (it *Iterator) Next() (key []byte, node *Node) {
+	key, node = it.Queue.Get()
+
+	for ord, child := range node.Children {
+		suffix := make([]byte, len(key))
+		copy(suffix, key)
+		suffix = append(suffix, ord)
+		it.Queue.Put(suffix, child)
+	}
+
+	return key, node
 }

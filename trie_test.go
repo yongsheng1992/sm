@@ -61,3 +61,21 @@ func TestNewTrie(t *testing.T) {
 		}
 	})
 }
+
+func TestTrie_SeekBefore(t *testing.T) {
+	urls := ExtractUrl("http://www.sina.com.cn")
+	trie := NewTrie()
+	for _, url := range urls {
+		trie.Insert([]byte(url), url)
+	}
+
+	it := trie.SeekAfter([]byte("https://finance.sina.com.cn"))
+	for it.HasNext() {
+		key, node := it.Next()
+		if node.IsKey {
+			if string(key) != node.Value {
+				t.Error("failed")
+			}
+		}
+	}
+}
