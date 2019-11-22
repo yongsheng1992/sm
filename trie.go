@@ -1,6 +1,8 @@
 package sm
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // An implement of trie tree
 
@@ -106,6 +108,39 @@ func (trie *Trie) SeekAfter(key []byte) (it *Iterator) {
 	fmt.Println(node.Value, string(key[0:step]), len(node.Children))
 	it = NewIterator(key, node)
 	return it
+}
+
+func (trie *Trie) Remove(key []byte) bool {
+	parent, node, step := trie.Walk(key)
+	keyLen := len(key)
+
+	if step < keyLen || step == 0 {
+		return false
+	}
+
+	if step == len(key) {
+		if node != nil {
+			// 不是key直接返回
+			if !node.IsKey {
+				return false
+			}
+
+			trie.NumberKey--
+			// 是key但是有子节点
+			if len(node.Children) > 0 {
+				node.IsKey = false
+				node.Value = nil
+				return true
+			}
+
+			// 是key没有子节点删除该节点
+			delete(parent.Children, key[step-1])
+			trie.NumberNode--
+
+			return true
+		}
+	}
+	return false
 }
 
 func (trie *Trie) SeekBefore(key []byte) []int {
