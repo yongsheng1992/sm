@@ -1,6 +1,9 @@
 package sm
 
-import "sync/atomic"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // An implement of trie tree
 
@@ -9,6 +12,7 @@ type Node struct {
 	Children map[uint8]*Node
 	Height   int
 	Value    interface{}
+	Lock     sync.RWMutex
 }
 
 type Trie struct {
@@ -28,11 +32,40 @@ func CreateNode(isKey bool, height int) *Node {
 	return node
 }
 
+func (node *Node) InsertChild(ord uint8, child *Node) {
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
+
+	node.Children[ord] = child
+}
+
+func (node *Node) RemoveChild(ord uint8) {
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
+
+	delete(node.Children, ord)
+}
+
+func (node *Node) GetChild(ord uint8) *Node {
+	node.Lock.RLock()
+	defer node.Lock.RUnlock()
+
+	return node.Children[ord]
+}
+
+func (node *Node) Update(isKey bool, value interface{}) {
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
+
+	node.IsKey = isKey
+	node.Value = value
+}
+
 func (trie *Trie) increaseNumberNode() {
 	atomic.AddInt32(&trie.NumberNode, 1)
 }
 
-func (trie *Trie) decreaseNumberBode() {
+func (trie *Trie) decreaseNumberNode() {
 	atomic.AddInt32(&trie.NumberNode, -1)
 }
 
@@ -52,7 +85,7 @@ func (trie *Trie) Walk(key []byte) (*Node, *Node, int) {
 	for i = 0; i < len(key); i++ {
 		order := key[i]
 		parent = node
-		node = node.Children[order]
+		node = node.GetChild(order)
 
 		if node == nil {
 			break
@@ -81,15 +114,14 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 
 	for i = step; i < keyLen; i++ {
 		order := key[i]
-		node.Children[order] = CreateNode(false, i)
-		trie.NumberNode += 1
-		node = node.Children[order]
+		node.InsertChild(order, CreateNode(false, i))
+		trie.increaseNumberNode()
 	}
 
 	oldValue = node.Value
 	node.IsKey = true
 	node.Value = value
-	trie.NumberKey += 1
+	trie.increaseNumberKey()
 
 	return oldValue, ret
 }
@@ -138,18 +170,16 @@ func (trie *Trie) Remove(key []byte) bool {
 				return false
 			}
 
-			trie.NumberKey--
+			trie.decreaseNumberKey()
 			// 是key但是有子节点
 			if len(node.Children) > 0 {
-				node.IsKey = false
-				node.Value = nil
+				node.Update(false, nil)
 				return true
 			}
 
 			// 是key没有子节点删除该节点
-			delete(parent.Children, key[step-1])
-			trie.NumberNode--
-
+			parent.RemoveChild(key[step-1])
+			trie.decreaseNumberNode()
 			return true
 		}
 	}
