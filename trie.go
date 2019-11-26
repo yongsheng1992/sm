@@ -1,5 +1,7 @@
 package sm
 
+import "sync/atomic"
+
 // An implement of trie tree
 
 type Node struct {
@@ -11,8 +13,8 @@ type Node struct {
 
 type Trie struct {
 	Root       *Node
-	NumberNode uint
-	NumberKey  uint
+	NumberNode int32
+	NumberKey  int32
 }
 
 func NewTrie() *Trie {
@@ -24,6 +26,22 @@ func NewTrie() *Trie {
 func CreateNode(isKey bool, height int) *Node {
 	node := &Node{IsKey: isKey, Height: height, Children: make(map[uint8]*Node)}
 	return node
+}
+
+func (trie *Trie) increaseNumberNode() {
+	atomic.AddInt32(&trie.NumberNode, 1)
+}
+
+func (trie *Trie) decreaseNumberBode() {
+	atomic.AddInt32(&trie.NumberNode, -1)
+}
+
+func (trie *Trie) increaseNumberKey() {
+	atomic.AddInt32(&trie.NumberKey, 1)
+}
+
+func (trie *Trie) decreaseNumberKey() {
+	atomic.AddInt32(&trie.NumberKey, -1)
 }
 
 func (trie *Trie) Walk(key []byte) (*Node, *Node, int) {
