@@ -13,16 +13,13 @@ type Node struct {
 	Children map[uint8]*Node
 	Height   int
 	Value    interface{}
+	Lock     sync.RWMutex
 }
 ```
 
 如果字符集全部是英文，可以用**uint8**，但是如果保存中文字符集，一个中文字符会多创建3个空节点，此时使用**rune**更合适。但是大部分情况是中英文混合的情况。如果分离key的粒度是个问题。
 
 基数树可以解决这个问题，但是实现复杂，插入性能低。
-
-## Radix tree
-
-## AC Automaton 
 
 # Replication
 
@@ -36,3 +33,10 @@ type Node struct {
 |*3\r\n|4|name|\r\n|6|remove|\r\n|3|abc|\r\n|
 
 ```
+
+# Todo List
+
+* [ ] 验证AOF文件记录数据的正确性
+* [ ] 从AOF文件加载数据
+* [ ] 实现主从复制
+* [ ] 性能检测
