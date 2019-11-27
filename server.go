@@ -137,12 +137,8 @@ func NewServer() *Server {
 
 	server := &Server{}
 	server.DB = make(map[string]*Trie)
+	// when receive a signal, server.AOF.Close() should be called.
 	server.AOF = NewAOF("aof")
-
-	go func() {
-		<-signals
-		server.AOF.Close()
-	}()
 
 	return server
 }
