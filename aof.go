@@ -1,8 +1,10 @@
 package sm
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -16,6 +18,18 @@ type AOF struct {
 
 func LogIt(msg string) {
 	log.Println(msg)
+}
+
+func ConvertInsert(name string, key string, value string) []byte {
+	params := []string{
+		"*4",
+		name,
+		key,
+		key,
+		value,
+	}
+	cmd := strings.Join(params, "\r\n")
+	return []byte(cmd)
 }
 
 func NewAOF(filename string) *AOF {
@@ -64,6 +78,8 @@ func (aof *AOF) Sync() {
 }
 
 func (aof *AOF) Close() {
+	fmt.Println("close")
+	fmt.Println(string(aof.Buffer))
 	aof.Flush()
 	aof.Sync()
 	err := aof.File.Close()
