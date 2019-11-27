@@ -1,7 +1,6 @@
 package sm
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -96,8 +95,6 @@ func (aof *AOF) Sync() {
 }
 
 func (aof *AOF) Close() {
-	fmt.Println("close")
-	fmt.Println(string(aof.Buffer))
 	aof.Flush()
 	aof.Sync()
 	err := aof.File.Close()
