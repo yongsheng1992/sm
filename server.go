@@ -2,6 +2,7 @@ package sm
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
 	"log"
@@ -19,7 +20,16 @@ type SearchRequest struct {
 	Limit  int      `json:"limit"`
 }
 
-func (s *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
+func (server *Server) Insert(name string, key []byte, value interface{}) error {
+	trie, ok := server.DB[name]
+	if !ok {
+		return errors.New(fmt.Sprintf("trie name `%s` not found", name))
+	}
+	trie.Insert(key, value)
+	return nil
+}
+
+func (server *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	var searchRequest SearchRequest
 	var searchResponse map[string][]string
 
@@ -37,7 +47,7 @@ func (s *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		searchRequest.Limit = 10
 	}
 
-	trie, ok := s.DB[searchRequest.Name]
+	trie, ok := server.DB[searchRequest.Name]
 
 	if !ok {
 		http.Error(w, "no trie found", 400)
@@ -68,7 +78,7 @@ func (s *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (s *Server) HandleKeyInsert(w http.ResponseWriter, r *http.Request) {
+func (server *Server) HandleKeyInsert(w http.ResponseWriter, r *http.Request) {
 	var postData []string
 
 	if err := json.NewDecoder(r.Body).Decode(&postData); err != nil {
@@ -78,26 +88,30 @@ func (s *Server) HandleKeyInsert(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	name := params["name"]
 
-	_, ok := s.DB[name]
-
+	_, ok := server.DB[name]
 	if !ok {
-		s.DB[name] = NewTrie()
+		http.Error(w, fmt.Sprintf("trie name `%s` not found", name), 500)
+		return
 	}
 
 	for _, key := range postData {
-		s.DB[name].Insert([]byte(key), nil)
+		if err := server.Insert(name, []byte(key), nil); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
 	}
 
 	if err := json.NewEncoder(w).Encode(make(map[string]interface{})); err != nil {
 		http.Error(w, err.Error(), 500)
+		return
 	}
 }
 
-func (s *Server) InitHTTPServer() {
+func (server *Server) InitHTTPServer() {
 
 	r := mux.NewRouter()
-	r.HandleFunc("/api/search", s.HandleSearch).Methods(http.MethodPost)
-	r.HandleFunc("/api/{name}", s.HandleKeyInsert).Methods(http.MethodPost)
+	r.HandleFunc("/api/search", server.HandleSearch).Methods(http.MethodPost)
+	r.HandleFunc("/api/{name}", server.HandleKeyInsert).Methods(http.MethodPost)
 
 	go func() {
 		fmt.Println("Init HTTP Server...")
