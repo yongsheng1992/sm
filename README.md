@@ -25,3 +25,14 @@ type Node struct {
 ## AC Automaton 
 
 # Replication
+
+节点写加锁的时候是否会影响到读？
+
+## 备份
+
+模仿redis的AOF文件记录对数据的操作记录，AOF文件格式：
+```
+|*4\r\n|4|name|\r\n|6|insert|\r\n|3|abc|\r\n|3|abc|\r\n|
+|*3\r\n|4|name|\r\n|6|remove|\r\n|3|abc|\r\n|
+
+```
