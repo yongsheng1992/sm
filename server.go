@@ -34,6 +34,16 @@ func (server *Server) Insert(name string, key []byte, value interface{}) error {
 	return nil
 }
 
+func (server *Server) Remove(name string, key string) error {
+	trie, ok := server.DB[name]
+	if !ok {
+		return errors.New(fmt.Sprintf("trie name `%s` not found", name))
+	}
+	trie.Remove([]byte(key))
+	server.AOF.Feed(ConvertRemove(name, key))
+	return nil
+}
+
 func (server *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	var searchRequest SearchRequest
 	var searchResponse map[string][]string
@@ -117,11 +127,65 @@ func (server *Server) HandleKeyInsert(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (server *Server) HandleKeyRemove(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	name := params["name"]
+	key := params["key"]
+
+	if err := server.Remove(name, key); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(make(map[string]interface{})); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+}
+
+type KeyGetResponse struct {
+	Key   string      `json:"key"`
+	Value interface{} `json:"value"`
+}
+
+func (server *Server) HandleKeyGet(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	name := params["name"]
+	key := params["key"]
+
+	_, ok := server.DB[name]
+
+	if !ok {
+		http.Error(w, "trie not found", 404)
+		return
+	}
+
+	ret, value := server.DB[name].Find([]byte(key))
+
+	if !ret {
+		http.Error(w, "key not found", 404)
+		return
+	}
+
+	var response KeyGetResponse
+	response = KeyGetResponse{
+		Key:   key,
+		Value: value,
+	}
+
+	if err := json.NewEncoder(w).Encode(&response); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+}
+
 func (server *Server) InitHTTPServer() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/api/search", server.HandleSearch).Methods(http.MethodPost)
 	r.HandleFunc("/api/{name}", server.HandleKeyInsert).Methods(http.MethodPost)
+	r.HandleFunc("/api/{name}/{key}", server.HandleKeyRemove).Methods(http.MethodDelete)
+	r.HandleFunc("/api/{name}/{key}", server.HandleKeyGet).Methods(http.MethodGet)
 
 	go func() {
 		fmt.Println("Init HTTP Server...")
