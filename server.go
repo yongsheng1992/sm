@@ -7,10 +7,14 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 type Server struct {
-	DB map[string]*Trie
+	DB  map[string]*Trie
+	AOF *AOF
 }
 
 type SearchRequest struct {
@@ -26,6 +30,7 @@ func (server *Server) Insert(name string, key []byte, value interface{}) error {
 		return errors.New(fmt.Sprintf("trie name `%s` not found", name))
 	}
 	trie.Insert(key, value)
+	server.AOF.Feed(ConvertInsert(name, string(key), ""))
 	return nil
 }
 
@@ -37,10 +42,12 @@ func (server *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&searchRequest); err != nil {
 		http.Error(w, err.Error(), 400)
+		return
 	}
 
 	if searchRequest.Name == "" {
 		http.Error(w, "name is required", 400)
+		return
 	}
 
 	if searchRequest.Limit == 0 {
@@ -66,10 +73,13 @@ func (server *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			it := trie.SeekAfter([]byte(key))
 			count := 0
 			for it.HasNext() && count < searchRequest.Limit {
-				k, _ := it.Next()
-				searchResponse[key] = append(searchResponse[key], string(k))
+				k, node := it.Next()
+				if node.IsKey {
+					searchResponse[key] = append(searchResponse[key], string(k))
+				}
 			}
 		}
+
 	}
 
 	if err := json.NewEncoder(w).Encode(searchResponse); err != nil {
@@ -83,6 +93,7 @@ func (server *Server) HandleKeyInsert(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&postData); err != nil {
 		http.Error(w, err.Error(), 400)
+		return
 	}
 
 	params := mux.Vars(r)
@@ -90,8 +101,7 @@ func (server *Server) HandleKeyInsert(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := server.DB[name]
 	if !ok {
-		http.Error(w, fmt.Sprintf("trie name `%s` not found", name), 500)
-		return
+		server.DB[name] = NewTrie()
 	}
 
 	for _, key := range postData {
@@ -122,7 +132,17 @@ func (server *Server) InitHTTPServer() {
 }
 
 func NewServer() *Server {
+	signals := make(chan os.Signal)
+	signal.Notify(signals, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	server := &Server{}
 	server.DB = make(map[string]*Trie)
+	server.AOF = NewAOF("aof")
+
+	go func() {
+		<-signals
+		server.AOF.Close()
+	}()
+
 	return server
 }
