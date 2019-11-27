@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -21,12 +22,29 @@ func LogIt(msg string) {
 }
 
 func ConvertInsert(name string, key string, value string) []byte {
+	op := "INSERT"
 	params := []string{
 		"*4",
-		name,
+		strconv.Itoa(len(op)),
+		op,
+		strconv.Itoa(len(key)),
 		key,
-		key,
+		strconv.Itoa(len(value)),
 		value,
+	}
+	cmd := strings.Join(params, "\r\n")
+	return []byte(cmd)
+}
+
+func ConvertRemove(name string, key string) []byte {
+	op := "REMOVE"
+
+	params := []string{
+		"*3",
+		strconv.Itoa(len(op)),
+		op,
+		strconv.Itoa(len(key)),
+		key,
 	}
 	cmd := strings.Join(params, "\r\n")
 	return []byte(cmd)
