@@ -116,6 +116,7 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 		order := key[i]
 		node.InsertChild(order, CreateNode(false, i))
 		trie.increaseNumberNode()
+		node = node.Children[order]
 	}
 
 	oldValue = node.Value
