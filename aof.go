@@ -1,73 +1,74 @@
 package sm
 
 import (
-	"io"
 	"log"
 	"os"
 	"sync"
 )
 
-// AOF implementation
-
-type AOFBuffer struct {
-	Buffer   []byte
-	Len      int
-	Offset   int64
-	FileName string
-	File     *os.File
-	Mutex    sync.Mutex
+type AOF struct {
+	Buffer        []byte
+	Mutex         sync.RWMutex
+	SyncOffset    int32
+	CurrentOffset int32
+	File          *os.File
 }
 
-func NewAOFBuffer(filename string) *AOFBuffer {
-	aof := &AOFBuffer{FileName: filename}
-	aof.Offset = 0
-	return aof
+func LogIt(msg string) {
+	log.Println(msg)
 }
 
-func (aof *AOFBuffer) Init() {
-	var err error
-	aof.File, err = os.OpenFile(aof.FileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
-	aof.Offset, err = aof.File.Seek(0, io.SeekEnd)
+func NewAOF(filename string) *AOF {
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
+	aof := &AOF{}
+	aof.File = file
+	return aof
 }
 
-func (aof *AOFBuffer) Write(cmd []byte) {
+func (aof *AOF) Feed(cmd []byte) {
 	aof.Mutex.Lock()
 	aof.Buffer = append(aof.Buffer, cmd...)
+	aof.CurrentOffset += int32(len(cmd))
 	aof.Mutex.Unlock()
-
-	if len(aof.Buffer) > 4194304 {
-		aof.Sync()
-	}
 }
 
-func (aof *AOFBuffer) Sync() {
-	aof.Mutex.Lock()
-	defer aof.Mutex.Unlock()
-
-	if len(aof.Buffer) == 0 {
-		return
-	}
-
+// Write buffer to disk
+func (aof *AOF) Flush() {
+	aof.Mutex.RLock()
 	n, err := aof.File.Write(aof.Buffer)
+	aof.Mutex.RUnlock()
+
 	if err != nil {
+		// log it
+		LogIt(err.Error())
 		return
 	}
 
+	aof.Mutex.Lock()
 	aof.Buffer = aof.Buffer[n:]
-	aof.Offset += int64(n)
+	aof.SyncOffset = int32(n)
+	aof.Mutex.Unlock()
+}
 
-	err = aof.File.Sync()
+func (aof *AOF) Sync() {
+	err := aof.File.Sync()
 	if err != nil {
-		return
+		//log it
+		LogIt(err.Error())
 	}
 }
 
-func (aof *AOFBuffer) Close() {
-	for len(aof.Buffer) != 0 {
-		aof.Sync()
+func (aof *AOF) Close() {
+	aof.Flush()
+	aof.Sync()
+	err := aof.File.Close()
+	if err != nil {
+		//log it
+		LogIt(err.Error())
 	}
 }
