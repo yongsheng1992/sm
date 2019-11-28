@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type AOF struct {
+type AofWriter struct {
 	Buffer        []byte
 	Mutex         sync.RWMutex
 	SyncOffset    int32
@@ -56,20 +56,20 @@ func ConvertRemove(name string, key string) []byte {
 	return []byte(cmd)
 }
 
-func NewAOF(filename string) *AOF {
+func NewAOF(filename string) *AofWriter {
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	aof := &AOF{}
+	aof := &AofWriter{}
 	aof.File = file
 	aof.Fsync = 2 // default fsync every second
 	return aof
 }
 
-func (aof *AOF) Feed(cmd []byte) {
+func (aof *AofWriter) Feed(cmd []byte) {
 	aof.Mutex.Lock()
 	aof.Buffer = append(aof.Buffer, cmd...)
 	aof.CurrentOffset += int32(len(cmd))
@@ -77,7 +77,7 @@ func (aof *AOF) Feed(cmd []byte) {
 }
 
 // Write buffer to disk
-func (aof *AOF) Flush() {
+func (aof *AofWriter) Flush() {
 	aof.Mutex.RLock()
 	n, err := aof.File.Write(aof.Buffer)
 	aof.Mutex.RUnlock()
@@ -94,7 +94,7 @@ func (aof *AOF) Flush() {
 	aof.Mutex.Unlock()
 }
 
-func (aof *AOF) Sync() {
+func (aof *AofWriter) Sync() {
 	err := aof.File.Sync()
 	if err != nil {
 		//log it
@@ -102,8 +102,11 @@ func (aof *AOF) Sync() {
 	}
 }
 
-func (aof *AOF) Close() {
-	aof.Ticker.Stop()
+func (aof *AofWriter) Close() {
+	if aof.Ticker != nil {
+		aof.Ticker.Stop()
+	}
+
 	aof.Flush()
 	aof.Sync()
 	err := aof.File.Close()
@@ -113,7 +116,7 @@ func (aof *AOF) Close() {
 	}
 }
 
-func (aof *AOF) Cron() {
+func (aof *AofWriter) Cron() {
 	if aof.Fsync == 2 {
 		aof.Ticker = time.NewTicker(time.Second)
 		go func() {
