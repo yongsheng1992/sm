@@ -5,16 +5,28 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 )
 
 type Server struct {
-	DB  map[string]*Trie
-	AOF *AOF
+	DB     map[string]*Trie
+	AOF    *AofWriter
+	Config struct {
+		Addr string `yaml:"addr"`
+		AOF  struct {
+			Fsync    int    `yaml:"fsync"`
+			FileName string `yaml:"filename"`
+		}
+	}
+	WG    sync.WaitGroup
+	Mutex sync.Mutex
 }
 
 type SearchRequest struct {
@@ -22,6 +34,23 @@ type SearchRequest struct {
 	Key    []string `json:"key"`
 	Option string   `json:"option"`
 	Limit  int      `json:"limit"`
+}
+
+func (server *Server) CreateTrie(name string) {
+	fmt.Println(name)
+	server.Mutex.Lock()
+	server.DB[name] = NewTrie()
+	server.Mutex.Unlock()
+}
+
+func (server *Server) GetTrie(name string) *Trie {
+	server.Mutex.Lock()
+	trie, ok := server.DB[name]
+	server.Mutex.Unlock()
+	if !ok {
+		return nil
+	}
+	return trie
 }
 
 func (server *Server) Insert(name string, key []byte, value interface{}) error {
@@ -64,10 +93,11 @@ func (server *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		searchRequest.Limit = 10
 	}
 
-	trie, ok := server.DB[searchRequest.Name]
+	trie := server.GetTrie(searchRequest.Name)
 
-	if !ok {
+	if trie == nil {
 		http.Error(w, "no trie found", 400)
+		return
 	}
 
 	for _, key := range searchRequest.Key {
@@ -109,9 +139,11 @@ func (server *Server) HandleKeyInsert(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	name := params["name"]
 
-	_, ok := server.DB[name]
-	if !ok {
-		server.DB[name] = NewTrie()
+	trie := server.GetTrie(name)
+
+	if trie == nil {
+		http.Error(w, "no trie found", 400)
+		return
 	}
 
 	for _, key := range postData {
@@ -179,20 +211,55 @@ func (server *Server) HandleKeyGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (server *Server) HandleTrieCreate(w http.ResponseWriter, r *http.Request) {
+	var postData map[string]string
+	var err error
+
+	if err = json.NewDecoder(r.Body).Decode(&postData); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	name, ok := postData["name"]
+
+	if !ok {
+		http.Error(w, "name must be specified", 400)
+		return
+	}
+
+	trie := server.GetTrie(name)
+
+	if trie == nil {
+		server.CreateTrie(name)
+	}
+
+	if err := json.NewEncoder(w).Encode(make(map[string]interface{})); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+}
+
 func (server *Server) InitHTTPServer() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/api/search", server.HandleSearch).Methods(http.MethodPost)
+	r.HandleFunc("/api", server.HandleTrieCreate).Methods(http.MethodPost)
 	r.HandleFunc("/api/{name}", server.HandleKeyInsert).Methods(http.MethodPost)
 	r.HandleFunc("/api/{name}/{key}", server.HandleKeyRemove).Methods(http.MethodDelete)
 	r.HandleFunc("/api/{name}/{key}", server.HandleKeyGet).Methods(http.MethodGet)
 
 	go func() {
-		fmt.Println("Init HTTP Server...")
-		if err := http.ListenAndServe(":8080", r); err != nil {
+		fmt.Println("Init HTTP Server... ", server.Config.Addr)
+		if err := http.ListenAndServe(server.Config.Addr, r); err != nil {
 			log.Fatal(err.Error())
 		}
 	}()
+}
+
+func (server *Server) InitAOF() {
+	if server.Config.AOF.Fsync == 2 {
+		server.AOF.Cron()
+	}
 }
 
 func NewServer() *Server {
@@ -201,8 +268,37 @@ func NewServer() *Server {
 
 	server := &Server{}
 	server.DB = make(map[string]*Trie)
-	// when receive a signal, server.AOF.Close() should be called.
-	server.AOF = NewAOF("aof")
+	// default aof is disabled
+	server.Config.AOF.Fsync = -1
+	server.Config.AOF.FileName = "./aof.log"
 
 	return server
+}
+
+func (server *Server) InitConfig(configFile string) {
+	var err error
+	var buf []byte
+
+	buf, err = ioutil.ReadFile(configFile)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	if err = yaml.Unmarshal(buf, &server.Config); err != nil {
+		log.Fatalln(err.Error())
+	}
+	if server.Config.AOF.Fsync != -1 {
+		server.AOF = NewAOF(server.Config.AOF.FileName)
+	}
+
+}
+
+func (server *Server) Serve() {
+	signals := make(chan os.Signal)
+	signal.Notify(signals, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	server.InitHTTPServer()
+	server.InitAOF()
+	<-signals
+	if server.Config.AOF.Fsync != -1 {
+		server.AOF.Close()
+	}
 }
