@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type AOF struct {
@@ -14,6 +15,8 @@ type AOF struct {
 	SyncOffset    int32
 	CurrentOffset int32
 	File          *os.File
+	Fsync         int
+	Ticker        *time.Ticker
 }
 
 func LogIt(msg string) {
@@ -26,6 +29,8 @@ func ConvertInsert(name string, key string, value string) []byte {
 		"*4",
 		strconv.Itoa(len(op)),
 		op,
+		strconv.Itoa(len(name)),
+		name,
 		strconv.Itoa(len(key)),
 		key,
 		strconv.Itoa(len(value)),
@@ -42,6 +47,8 @@ func ConvertRemove(name string, key string) []byte {
 		"*3",
 		strconv.Itoa(len(op)),
 		op,
+		strconv.Itoa(len(name)),
+		name,
 		strconv.Itoa(len(key)),
 		key,
 	}
@@ -58,6 +65,7 @@ func NewAOF(filename string) *AOF {
 
 	aof := &AOF{}
 	aof.File = file
+	aof.Fsync = 2 // default fsync every second
 	return aof
 }
 
@@ -95,11 +103,23 @@ func (aof *AOF) Sync() {
 }
 
 func (aof *AOF) Close() {
+	aof.Ticker.Stop()
 	aof.Flush()
 	aof.Sync()
 	err := aof.File.Close()
 	if err != nil {
 		//log it
 		LogIt(err.Error())
+	}
+}
+
+func (aof *AOF) Cron() {
+	if aof.Fsync == 2 {
+		aof.Ticker = time.NewTicker(time.Second)
+		go func() {
+			for range aof.Ticker.C {
+				aof.Sync()
+			}
+		}()
 	}
 }
