@@ -239,11 +239,41 @@ func (server *Server) HandleTrieCreate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type TrieStateResponse struct {
+	Name       string `json:"name"`
+	NumberNode int32  `json:"number_node"`
+	NumberKey  int32  `json:"number_key"`
+}
+
+func (server *Server) HandleTrieState(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	name := params["name"]
+
+	trie := server.GetTrie(name)
+	if trie == nil {
+		http.Error(w, fmt.Sprintf("trie `%s` not found", name), 404)
+		return
+	}
+
+	var resp TrieStateResponse
+	resp = TrieStateResponse{
+		Name:       name,
+		NumberNode: trie.NumberNode,
+		NumberKey:  trie.NumberKey,
+	}
+	if err := json.NewEncoder(w).Encode(&resp); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+}
+
 func (server *Server) InitHTTPServer() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/api/search", server.HandleSearch).Methods(http.MethodPost)
 	r.HandleFunc("/api", server.HandleTrieCreate).Methods(http.MethodPost)
+	r.HandleFunc("/api/{name}", server.HandleTrieState).Methods(http.MethodGet)
 	r.HandleFunc("/api/{name}", server.HandleKeyInsert).Methods(http.MethodPost)
 	r.HandleFunc("/api/{name}/{key}", server.HandleKeyRemove).Methods(http.MethodDelete)
 	r.HandleFunc("/api/{name}/{key}", server.HandleKeyGet).Methods(http.MethodGet)
