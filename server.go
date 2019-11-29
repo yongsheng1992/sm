@@ -272,11 +272,11 @@ func (server *Server) InitHTTPServer() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/api/trie/search", server.HandleSearch).Methods(http.MethodPost)
-	r.HandleFunc("/api/trie", server.HandleSearch).Methods(http.MethodPost)
-	r.HandleFunc("/api/trie/{name}", server.HandleSearch).Methods(http.MethodGet)
-	r.HandleFunc("/api/trie/{name}", server.HandleSearch).Methods(http.MethodPost)
-	r.HandleFunc("/api/trie/{name}/{key}", server.HandleSearch).Methods(http.MethodDelete)
-	r.HandleFunc("/api/trie/{name}/{key}", server.HandleSearch).Methods(http.MethodGet)
+	r.HandleFunc("/api/trie", server.HandleTrieCreate).Methods(http.MethodPost)
+	r.HandleFunc("/api/trie/{name}", server.HandleTrieState).Methods(http.MethodGet)
+	r.HandleFunc("/api/trie/{name}", server.HandleKeyInsert).Methods(http.MethodPost)
+	r.HandleFunc("/api/trie/{name}/{key}", server.HandleKeyRemove).Methods(http.MethodDelete)
+	r.HandleFunc("/api/trie/{name}/{key}", server.HandleKeyGet).Methods(http.MethodGet)
 
 	go func() {
 		fmt.Println("Init HTTP Server... ", server.Config.Addr)
