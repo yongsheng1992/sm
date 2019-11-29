@@ -106,6 +106,7 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 
 	if step == keyLen {
 		ret = 1
+		return nil, ret
 	}
 
 	if node == nil {
