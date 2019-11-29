@@ -13,7 +13,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 )
 
 type Server struct {
@@ -52,14 +51,6 @@ func (server *Server) GetTrie(name string) *Trie {
 		return nil
 	}
 	return trie
-}
-
-func logging(f http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		st := time.Now()
-		f(w, r)
-		log.Println(r.URL.Path, time.Since(st))
-	}
 }
 
 func (server *Server) Insert(name string, key []byte, value interface{}) error {
@@ -280,12 +271,12 @@ func (server *Server) HandleTrieState(w http.ResponseWriter, r *http.Request) {
 func (server *Server) InitHTTPServer() {
 
 	r := mux.NewRouter()
-	r.HandleFunc("/api/trie/search", logging(server.HandleSearch)).Methods(http.MethodPost)
-	r.HandleFunc("/api/trie", logging(server.HandleTrieCreate)).Methods(http.MethodPost)
-	r.HandleFunc("/api/trie/{name}", logging(server.HandleTrieState)).Methods(http.MethodGet)
-	r.HandleFunc("/api/trie/{name}", logging(server.HandleKeyInsert)).Methods(http.MethodPost)
-	r.HandleFunc("/api/trie/{name}/{key}", logging(server.HandleKeyRemove)).Methods(http.MethodDelete)
-	r.HandleFunc("/api/trie/{name}/{key}", logging(server.HandleKeyGet)).Methods(http.MethodGet)
+	r.HandleFunc("/api/trie/search", server.HandleSearch).Methods(http.MethodPost)
+	r.HandleFunc("/api/trie", server.HandleSearch).Methods(http.MethodPost)
+	r.HandleFunc("/api/trie/{name}", server.HandleSearch).Methods(http.MethodGet)
+	r.HandleFunc("/api/trie/{name}", server.HandleSearch).Methods(http.MethodPost)
+	r.HandleFunc("/api/trie/{name}/{key}", server.HandleSearch).Methods(http.MethodDelete)
+	r.HandleFunc("/api/trie/{name}/{key}", server.HandleSearch).Methods(http.MethodGet)
 
 	go func() {
 		fmt.Println("Init HTTP Server... ", server.Config.Addr)
