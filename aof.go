@@ -57,7 +57,7 @@ func ConvertRemove(name string, key string) []byte {
 }
 
 func NewAOF(filename string) *AofWriter {
-	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0664)
 
 	if err != nil {
 		log.Fatal(err.Error())
@@ -121,6 +121,7 @@ func (aof *AofWriter) Cron() {
 		aof.Ticker = time.NewTicker(time.Second)
 		go func() {
 			for range aof.Ticker.C {
+				aof.Flush()
 				aof.Sync()
 			}
 		}()
