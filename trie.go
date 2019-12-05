@@ -1,6 +1,7 @@
 package sm
 
 import (
+	"log"
 	"sync"
 	"sync/atomic"
 )
@@ -88,7 +89,6 @@ func (trie *Trie) Walk(key []byte) (*Node, *Node, int) {
 }
 
 func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, ret int) {
-	var i int
 	var parent *Node
 	var node *Node
 
@@ -97,59 +97,31 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 	parent = trie.Root
 	node = trie.Root
 
-	// 此时walk是没有查找到
-	// 但是在插入的时候，已经有其它协程插入了
-	// 这样数据就丢失了，特别是节点是key的情况
-	// 此时就丢掉了一个key
-	for i = 0; i < len(key); i++ {
+	if parent == nil || node == nil {
+		log.Fatal("trie.Root is nil")
+		return
+	}
+
+	for i := 0; i < keyLen; i++ {
 		order := key[i]
-		// 当前节点添加读锁
 		parent = node
 		parent.Lock.Lock()
-
 		node = node.GetChild(order)
 
-		// 这里break之后，parent会持有读锁
-		if node == nil {
-			break
+		if node != nil {
+			parent.Lock.Unlock()
+			continue
 		}
-
-		// 当前节点释放读锁
-		parent.Lock.Unlock()
-	}
-
-	if i == keyLen && node != nil {
-		ret = 1
-		oldValue = node.Value
-		if !node.IsKey {
-			node.Update(true, value)
-			trie.increaseNumberKey()
-
-		}
-		return oldValue, ret
-	}
-
-	if node == nil {
-		node = parent
-	}
-
-	for ; i < keyLen; i++ {
-		order := key[i]
 
 		childNode := CreateNode(false, i)
+		parent.Children[order] = childNode
+		parent.Lock.Unlock()
 
-		node.Children[order] = childNode
-		node.Lock.Unlock()
-		trie.increaseNumberNode()
-
-		node = childNode
-		node.Lock.Lock()
 	}
 
 	oldValue = node.Value
 	node.IsKey = true
 	node.Value = value
-	node.Lock.Unlock()
 	trie.increaseNumberKey()
 
 	return oldValue, ret
