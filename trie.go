@@ -12,7 +12,7 @@ type Node struct {
 	Children map[uint8]*Node
 	Height   int
 	Value    interface{}
-	Lock     sync.RWMutex
+	Lock     sync.Mutex
 }
 
 type Trie struct {
@@ -33,23 +33,14 @@ func CreateNode(isKey bool, height int) *Node {
 }
 
 func (node *Node) InsertChild(ord uint8, child *Node) {
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
-
 	node.Children[ord] = child
 }
 
 func (node *Node) RemoveChild(ord uint8) {
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
-
 	delete(node.Children, ord)
 }
 
 func (node *Node) GetChild(ord uint8) *Node {
-	node.Lock.RLock()
-	defer node.Lock.RUnlock()
-
 	return node.Children[ord]
 }
 
@@ -90,6 +81,7 @@ func (trie *Trie) Walk(key []byte) (*Node, *Node, int) {
 		if node == nil {
 			break
 		}
+
 	}
 
 	return parent, node, i
@@ -99,31 +91,65 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 	var i int
 	var parent *Node
 	var node *Node
+
 	keyLen := len(key)
 	ret = 0
+	parent = trie.Root
+	node = trie.Root
 
-	parent, node, step := trie.Walk(key)
+	// 此时walk是没有查找到
+	// 但是在插入的时候，已经有其它协程插入了
+	// 这样数据就丢失了，特别是节点是key的情况
+	// 此时就丢掉了一个key
+	for i = 0; i < len(key); i++ {
+		order := key[i]
+		// 当前节点添加读锁
+		parent = node
+		parent.Lock.Lock()
 
-	if step == keyLen {
+		node = node.GetChild(order)
+
+		// 这里break之后，parent会持有读锁
+		if node == nil {
+			break
+		}
+
+		// 当前节点释放读锁
+		parent.Lock.Unlock()
+	}
+
+	if i == keyLen && node != nil {
 		ret = 1
-		return nil, ret
+		oldValue = node.Value
+		if !node.IsKey {
+			node.Update(true, value)
+			trie.increaseNumberKey()
+
+		}
+		return oldValue, ret
 	}
 
 	if node == nil {
 		node = parent
 	}
 
-	for i = step; i < keyLen; i++ {
+	for ; i < keyLen; i++ {
 		order := key[i]
+
 		childNode := CreateNode(false, i)
-		node.InsertChild(order, childNode)
+
+		node.Children[order] = childNode
+		node.Lock.Unlock()
 		trie.increaseNumberNode()
+
 		node = childNode
+		node.Lock.Lock()
 	}
 
 	oldValue = node.Value
 	node.IsKey = true
 	node.Value = value
+	node.Lock.Unlock()
 	trie.increaseNumberKey()
 
 	return oldValue, ret
@@ -136,14 +162,11 @@ func (trie *Trie) Find(key []byte) (ret bool, value interface{}) {
 
 	_, node, step := trie.Walk(key)
 
-	if node == nil {
-		return ret, value
-	}
-
 	if step == keyLen && node.IsKey {
 		ret = true
 		value = node.Value
 	}
+
 	return ret, value
 }
 
@@ -159,14 +182,36 @@ func (trie *Trie) SeekAfter(key []byte) (it *Iterator) {
 }
 
 func (trie *Trie) Remove(key []byte) bool {
-	parent, node, step := trie.Walk(key)
+	var i int
+	var parent *Node
+	var node *Node
+
+	parent = trie.Root
+	node = trie.Root
 	keyLen := len(key)
 
-	if step < keyLen || step == 0 {
+	for i = 0; i < keyLen; i++ {
+		order := key[i]
+		// 当前节点添加读锁
+		parent = node
+		parent.Lock.Lock()
+
+		node = node.GetChild(order)
+
+		// 这里break之后，parent会持有读锁
+		if node == nil {
+			break
+		}
+
+		// 当前节点释放读锁
+		parent.Lock.Unlock()
+	}
+
+	if i < keyLen || i == 0 {
 		return false
 	}
 
-	if step == len(key) {
+	if i == keyLen {
 		if node != nil {
 			// 不是key直接返回
 			if !node.IsKey {
@@ -181,7 +226,7 @@ func (trie *Trie) Remove(key []byte) bool {
 			}
 
 			// 是key没有子节点删除该节点
-			parent.RemoveChild(key[step-1])
+			parent.RemoveChild(key[i-1])
 			trie.decreaseNumberNode()
 			return true
 		}
