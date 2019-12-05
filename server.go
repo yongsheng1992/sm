@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
@@ -24,6 +25,7 @@ type Server struct {
 			Fsync    int    `yaml:"fsync"`
 			FileName string `yaml:"filename"`
 		}
+		Debug bool
 	}
 	WG    sync.WaitGroup
 	Mutex sync.Mutex
@@ -277,6 +279,21 @@ func (server *Server) InitHTTPServer() {
 	r.HandleFunc("/api/trie/{name}", server.HandleKeyInsert).Methods(http.MethodPost)
 	r.HandleFunc("/api/trie/{name}/{key}", server.HandleKeyRemove).Methods(http.MethodDelete)
 	r.HandleFunc("/api/trie/{name}/{key}", server.HandleKeyGet).Methods(http.MethodGet)
+
+	// debug模式打开pprof
+	if server.Config.Debug {
+		r.HandleFunc("/debug/pprof/", pprof.Index)
+		r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		r.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		r.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+
+		r.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+		r.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+		r.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+		r.Handle("/debug/pprof/block", pprof.Handler("block"))
+		r.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+		r.Handle("/debug/pprof/profile", pprof.Handler("profile"))
+	}
 
 	go func() {
 		fmt.Println("Init HTTP Server... ", server.Config.Addr)
