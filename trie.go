@@ -117,6 +117,7 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 
 		node = CreateNode(false, i)
 		parent.Children[order] = node
+		trie.increaseNumberNode()
 		parent.Lock.Unlock()
 
 	}
