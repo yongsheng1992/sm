@@ -36,7 +36,12 @@ type Node struct {
 
 # Todo List
 
+* [ ] 字典树并发插入和删除测试
 * [ ] 验证AOF文件记录数据的正确性
 * [ ] 从AOF文件加载数据
 * [ ] 实现主从复制
 * [ ] 性能检测
+
+# Bug
+
+* [x] 在并发插入关键词的时候报错：concurrent map read and map write
