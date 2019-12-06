@@ -13,7 +13,7 @@ type Node struct {
 	Children map[uint8]*Node
 	Height   int
 	Value    interface{}
-	Lock     sync.RWMutex
+	Lock     sync.Mutex
 }
 ```
 
