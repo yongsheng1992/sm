@@ -1,7 +1,6 @@
 package sm
 
 import (
-	"log"
 	"sync"
 	"sync/atomic"
 )
@@ -45,12 +44,16 @@ func (node *Node) GetChild(ord uint8) *Node {
 	return node.Children[ord]
 }
 
-func (node *Node) Update(isKey bool, value interface{}) {
+func (node *Node) Update(isKey bool, value interface{}) (ret bool) {
 	node.Lock.Lock()
 	defer node.Lock.Unlock()
 
+	ret = !node.IsKey
+
 	node.IsKey = isKey
 	node.Value = value
+
+	return ret
 }
 
 func (trie *Trie) increaseNumberNode() {
@@ -97,9 +100,8 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 	parent = trie.Root
 	node = trie.Root
 
-	if parent == nil || node == nil {
-		log.Fatal("trie.Root is nil")
-		return
+	if trie.Root == nil {
+		return oldValue, ret
 	}
 
 	for i := 0; i < keyLen; i++ {
@@ -113,17 +115,17 @@ func (trie *Trie) Insert(key []byte, value interface{}) (oldValue interface{}, r
 			continue
 		}
 
-		childNode := CreateNode(false, i)
-		parent.Children[order] = childNode
+		node = CreateNode(false, i)
+		parent.Children[order] = node
 		parent.Lock.Unlock()
 
 	}
 
 	oldValue = node.Value
-	node.IsKey = true
-	node.Value = value
-	trie.increaseNumberKey()
-
+	// 这里需要在思考一下是什么情况
+	if node.Update(true, value) {
+		trie.increaseNumberKey()
+	}
 	return oldValue, ret
 }
 
