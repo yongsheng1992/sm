@@ -161,18 +161,18 @@ func (trie *Trie) Remove(key []byte) bool {
 
 		if node != nil {
 			if i == keyLen-1 {
+				node.Lock.Lock()
 				if node.IsKey {
-					node.Update(false, node.Value)
 					trie.decreaseNumberKey()
-
-					// 该节点没有子节点需要删除
-					if len(node.Children) == 0 {
-						trie.decreaseNumberNode()
-						parent.RemoveChild(order)
-					}
-					parent.Lock.Unlock()
-					return true
+					node.IsKey = false
 				}
+
+				if len(node.Children) == 0 {
+					trie.decreaseNumberNode()
+					parent.RemoveChild(order)
+				}
+
+				node.Lock.Unlock()
 				parent.Lock.Unlock()
 				return false
 			}
@@ -212,52 +212,6 @@ func (trie *Trie) SeekAfter(key []byte) (it *Iterator) {
 	it = NewIterator(key, node)
 	return it
 }
-
-//func (trie *Trie) Remove(key []byte) bool {
-//	var parent *Node
-//	var node *Node
-//
-//	parent = trie.Root
-//	node = trie.Root
-//	keyLen := len(key)
-//
-//	for i := 0; i < keyLen; i++ {
-//		order := key[i]
-//		parent = node
-//		parent.Lock.Lock()
-//		node = node.GetChild(order)
-//
-//		if node == nil {
-//			parent.Lock.Unlock()
-//			return false
-//		}
-//
-//		// 如果有key则走的这个分支
-//		if i == keyLen-1 {
-//			if !node.IsKey {
-//				parent.Lock.Unlock()
-//				return false
-//			}
-//
-//			trie.decreaseNumberKey()
-//
-//			if len(node.Children) > 0 {
-//				node.Update(false, nil)
-//				parent.Lock.Unlock()
-//				return true
-//			}
-//
-//			parent.RemoveChild(order)
-//			parent.Lock.Unlock()
-//			trie.decreaseNumberNode()
-//			return true
-//		}
-//
-//		parent.Lock.Unlock()
-//	}
-//
-//	return false
-//}
 
 func (trie *Trie) SeekBefore(key []byte) []int {
 	var i int
