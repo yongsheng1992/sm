@@ -157,7 +157,6 @@ func (trie *Trie) SeekAfter(key []byte) (it *Iterator) {
 }
 
 func (trie *Trie) Remove(key []byte) bool {
-	var i int
 	var parent *Node
 	var node *Node
 
@@ -165,47 +164,41 @@ func (trie *Trie) Remove(key []byte) bool {
 	node = trie.Root
 	keyLen := len(key)
 
-	for i = 0; i < keyLen; i++ {
+	for i := 0; i < keyLen; i++ {
 		order := key[i]
-		// 当前节点添加读锁
 		parent = node
 		parent.Lock.Lock()
-
 		node = node.GetChild(order)
 
-		// 这里break之后，parent会持有读锁
 		if node == nil {
-			break
+			parent.Lock.Unlock()
+			return false
 		}
 
-		// 当前节点释放读锁
-		parent.Lock.Unlock()
-	}
-
-	if i < keyLen || i == 0 {
-		return false
-	}
-
-	if i == keyLen {
-		if node != nil {
-			// 不是key直接返回
+		// 如果有key则走的这个分支
+		if i == keyLen-1 {
 			if !node.IsKey {
+				parent.Lock.Unlock()
 				return false
 			}
 
 			trie.decreaseNumberKey()
-			// 是key但是有子节点
+
 			if len(node.Children) > 0 {
 				node.Update(false, nil)
+				parent.Lock.Unlock()
 				return true
 			}
 
-			// 是key没有子节点删除该节点
-			parent.RemoveChild(key[i-1])
+			parent.RemoveChild(order)
+			parent.Lock.Unlock()
 			trie.decreaseNumberNode()
 			return true
 		}
+
+		parent.Lock.Unlock()
 	}
+
 	return false
 }
 
