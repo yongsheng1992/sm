@@ -29,10 +29,12 @@ type Node struct {
 
 模仿redis的AOF文件记录对数据的操作记录，AOF文件格式：
 ```
-|*4\r\n|4|name|\r\n|6|insert|\r\n|3|abc|\r\n|3|abc|\r\n|
-|*3\r\n|4|name|\r\n|6|remove|\r\n|3|abc|\r\n|
+|*4\r\n|$4|name|\r\n|$6|insert|\r\n|$3|abc|\r\n|$3|abc|\r\n|
+|*3\r\n|$4|name|\r\n|$6|remove|\r\n|$3|abc|\r\n|
 
 ```
+
+`*4`便是该条命令有4个参数，`$4`便是操作暂用4个字节。
 
 # Todo List
 
